@@ -1,1 +1,22 @@
-region = "us-east-1"
+aws_region    = "us-east-1"
+environment   = "prod"
+domain        = "dhinrichs.dev"
+platform_name = "mitto"
+
+# VPC
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+# ECS — API service
+api_cpu           = 256
+api_memory        = 512
+api_desired_count = 1
+
+# RDS Aurora Serverless v2
+db_name     = "mitto"
+db_username = "mitto"
+db_min_acu  = 0.5
+db_max_acu  = 4
+
+# ECR
+ecr_image_retention = 10
