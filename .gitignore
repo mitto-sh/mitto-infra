@@ -6,3 +6,6 @@
 .terraform.lock.hcl
 crash.log
 override.tf
+
+.env
+secrets/

@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mitto
+      POSTGRES_PASSWORD: mitto
+      POSTGRES_DB: mitto
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mitto"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: mitto-api/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://mitto:mitto@postgres:5432/mitto
+      REDIS_URL: redis://redis:6379
+      DASHBOARD_URL: http://localhost:4001
+      GITHUB_APP_PRIVATE_KEY_PATH: /app/secrets/github-app-private-key.pem
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./secrets:/app/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: mitto-worker/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://mitto:mitto@postgres:5432/mitto
+      REDIS_URL: redis://redis:6379
+      MITTO_BUILD_URL: http://build:3001
+      MITTO_ORCHESTRATOR_URL: http://orchestrator:3003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  build:
+    build:
+      context: ..
+      dockerfile: mitto-build/Dockerfile
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379
+      GITHUB_APP_PRIVATE_KEY_PATH: /app/secrets/github-app-private-key.pem
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./secrets:/app/secrets:ro
+      - ../mitto-test-repos:/Users/diegoh/Desktop/mitto/mitto-test-repos:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: mitto-orchestrator/Dockerfile
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379
+      DEPLOY_MODE: docker
+      DEPLOY_HOST: host.docker.internal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "3003:3003"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  realtime:
+    build:
+      context: ..
+      dockerfile: mitto-realtime/Dockerfile
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "4104:4104"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: mitto-dashboard/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+        NEXT_PUBLIC_REALTIME_URL: ws://localhost:4104
+    ports:
+      - "4001:4001"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
