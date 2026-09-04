@@ -43,9 +43,9 @@ variable "instance_type" {
 }
 
 variable "ebs_size_gb" {
-  description = "Root volume size (gp3)"
+  description = "Root volume size (gp3) — must be >= the al2023 AMI snapshot's own size (30GB)"
   type        = number
-  default     = 20
+  default     = 30
 }
 
 variable "ssh_public_key" {
@@ -82,4 +82,62 @@ variable "startup_hour" {
   description = "Hour (0-23, local schedule_timezone) the instance starts Mon-Fri (stays off Sat/Sun)"
   type        = number
   default     = 9
+}
+
+# ── APP SECRETS (mitto-api needs these to boot / connect GitHub-App+GitLab) ────
+variable "github_client_id" {
+  description = "GitHub OAuth App client ID (login) — mitto-api fails to start without this"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_client_secret" {
+  description = "GitHub OAuth App client secret (login) — mitto-api fails to start without this"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_app_id" {
+  description = "GitHub App ID (repo connection, separate from the OAuth login app above)"
+  type        = string
+  default     = ""
+}
+
+variable "github_app_slug" {
+  description = "GitHub App slug"
+  type        = string
+  default     = ""
+}
+
+variable "github_app_client_id" {
+  description = "GitHub App client ID"
+  type        = string
+  default     = ""
+}
+
+variable "github_app_client_secret" {
+  description = "GitHub App client secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "github_app_private_key" {
+  description = "GitHub App private key (.pem contents) — written to /opt/mitto/secrets on the instance"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "gitlab_client_id" {
+  description = "GitLab OAuth App client ID"
+  type        = string
+  default     = ""
+}
+
+variable "gitlab_client_secret" {
+  description = "GitLab OAuth App client secret"
+  type        = string
+  sensitive   = true
+  default     = ""
 }

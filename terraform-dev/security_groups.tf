@@ -1,7 +1,7 @@
 # ── ALB ────────────────────────────────────────────────────────────────────────
 resource "aws_security_group" "alb" {
   name        = "${local.name}-alb-sg"
-  description = "ALB — allow HTTP/HTTPS from internet"
+  description = "ALB - allow HTTP/HTTPS from internet"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -31,14 +31,21 @@ resource "aws_security_group" "alb" {
 # ── EC2 (docker compose host) ─────────────────────────────────────────────────
 resource "aws_security_group" "ec2" {
   name        = "${local.name}-ec2-sg"
-  description = "Dev EC2 — API traffic only from ALB, SSH only from allowed CIDR"
+  description = "Dev EC2 - public-facing service traffic only from ALB, SSH only from allowed CIDR"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    from_port       = 3000
-    to_port         = 3000
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+  # api, dashboard, realtime — the 3 services with an ALB target group.
+  # worker/build/orchestrator stay internal-only (container-to-container on
+  # the Docker Compose network, never cross the ENI this SG governs).
+  dynamic "ingress" {
+    for_each = { api = 4000, dashboard = 4001, realtime = 4104 }
+    content {
+      description     = "${ingress.key} from ALB"
+      from_port       = ingress.value
+      to_port         = ingress.value
+      protocol        = "tcp"
+      security_groups = [aws_security_group.alb.id]
+    }
   }
 
   ingress {

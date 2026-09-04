@@ -20,20 +20,24 @@ resource "aws_acm_certificate" "wildcard" {
 }
 
 resource "aws_route53_record" "cert_validation" {
+  # Keyed by resource_record_name, not domain_name — the apex and wildcard SANs
+  # of this cert share the identical validation CNAME. The trailing `...`
+  # groups same-key entries into a list instead of erroring on the duplicate;
+  # that list always has exactly 1 element in practice.
   for_each = {
     for dvo in aws_acm_certificate.wildcard.domain_validation_options :
-    dvo.domain_name => {
+    dvo.resource_record_name => {
       name   = dvo.resource_record_name
       type   = dvo.resource_record_type
       record = dvo.resource_record_value
-    }
+    }...
   }
 
   zone_id = aws_route53_zone.main.zone_id
-  name    = each.value.name
-  type    = each.value.type
+  name    = each.value[0].name
+  type    = each.value[0].type
   ttl     = 60
-  records = [each.value.record]
+  records = [each.value[0].record]
 }
 
 resource "aws_acm_certificate_validation" "wildcard" {
@@ -44,6 +48,30 @@ resource "aws_acm_certificate_validation" "wildcard" {
 resource "aws_route53_record" "api" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "api.${var.domain}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "aws_route53_record" "app" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "app.${var.domain}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.main.dns_name
+    zone_id                = aws_lb.main.zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "aws_route53_record" "realtime" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "realtime.${var.domain}"
   type    = "A"
 
   alias {

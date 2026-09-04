@@ -1,7 +1,7 @@
-# Same 5 service repos as prod — images pushed here get pulled by the dev EC2
+# Same repos as prod — images pushed here get pulled by the dev EC2
 # instance today, and by ECS later with zero change to the repo names.
 resource "aws_ecr_repository" "services" {
-  for_each             = toset(["api", "build", "orchestrator", "worker", "dashboard"])
+  for_each             = toset(["api", "build", "orchestrator", "worker", "dashboard", "realtime"])
   name                 = "${local.name}/${each.key}"
   image_tag_mutability = "MUTABLE"
   force_delete         = true

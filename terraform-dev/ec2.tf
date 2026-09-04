@@ -72,17 +72,32 @@ resource "random_password" "encryption_key" {
 
 # ── INSTANCE ───────────────────────────────────────────────────────────────────
 locals {
+  ecr_registry = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com"
+
   env_file = <<-EOT
     NODE_ENV=development
-    PORT=3000
     DATABASE_URL=postgres://mitto:${random_password.db.result}@postgres:5432/mitto
     REDIS_URL=redis://redis:6379
     JWT_SECRET=${random_password.jwt_secret.result}
     JWT_EXPIRES_IN=7d
-    AWS_REGION=${var.aws_region}
-    ECR_REGISTRY=${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com
-    PLATFORM_DOMAIN=${var.domain}
     ENCRYPTION_KEY=${random_password.encryption_key.result}
+    AWS_REGION=${var.aws_region}
+    ECR_REGISTRY=${local.ecr_registry}
+    PLATFORM_DOMAIN=https://api.${var.domain}
+    DASHBOARD_URL=https://app.${var.domain}
+    GITHUB_CLIENT_ID=${var.github_client_id}
+    GITHUB_CLIENT_SECRET=${var.github_client_secret}
+    GITHUB_APP_ID=${var.github_app_id}
+    GITHUB_APP_SLUG=${var.github_app_slug}
+    GITHUB_APP_CLIENT_ID=${var.github_app_client_id}
+    GITHUB_APP_CLIENT_SECRET=${var.github_app_client_secret}
+    GITHUB_APP_PRIVATE_KEY_PATH=/app/secrets/github-app-private-key.pem
+    GITLAB_CLIENT_ID=${var.gitlab_client_id}
+    GITLAB_CLIENT_SECRET=${var.gitlab_client_secret}
+    MITTO_BUILD_URL=http://build:3001
+    MITTO_ORCHESTRATOR_URL=http://orchestrator:3003
+    DEPLOY_MODE=docker
+    DEPLOY_HOST=host.docker.internal
   EOT
 
   docker_compose = <<-EOT
@@ -96,24 +111,101 @@ locals {
           POSTGRES_DB: mitto
         volumes:
           - pgdata:/var/lib/postgresql/data
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U mitto"]
+          interval: 5s
+          timeout: 5s
+          retries: 5
 
       redis:
         image: redis:7-alpine
         restart: unless-stopped
+        volumes:
+          - redisdata:/data
+        healthcheck:
+          test: ["CMD", "redis-cli", "ping"]
+          interval: 5s
+          timeout: 5s
+          retries: 5
 
-      # Uncomment once mitto-api has been built and pushed to ECR:
-      # api:
-      #   image: ${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${local.name}/api:latest
-      #   restart: unless-stopped
-      #   env_file: .env
-      #   ports:
-      #     - "3000:3000"
-      #   depends_on:
-      #     - postgres
-      #     - redis
+      api:
+        image: ${local.ecr_registry}/${local.name}/api:latest
+        restart: unless-stopped
+        env_file: .env
+        environment:
+          PORT: 4000
+        ports:
+          - "4000:4000"
+        volumes:
+          - ./secrets:/app/secrets:ro
+        depends_on:
+          postgres:
+            condition: service_healthy
+          redis:
+            condition: service_healthy
+
+      worker:
+        image: ${local.ecr_registry}/${local.name}/worker:latest
+        restart: unless-stopped
+        env_file: .env
+        environment:
+          PORT: 3002
+        depends_on:
+          postgres:
+            condition: service_healthy
+          redis:
+            condition: service_healthy
+
+      build:
+        image: ${local.ecr_registry}/${local.name}/build:latest
+        restart: unless-stopped
+        env_file: .env
+        environment:
+          PORT: 3001
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+          - ./secrets:/app/secrets:ro
+        depends_on:
+          redis:
+            condition: service_healthy
+
+      orchestrator:
+        image: ${local.ecr_registry}/${local.name}/orchestrator:latest
+        restart: unless-stopped
+        env_file: .env
+        environment:
+          PORT: 3003
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+        extra_hosts:
+          - "host.docker.internal:host-gateway"
+        depends_on:
+          redis:
+            condition: service_healthy
+
+      realtime:
+        image: ${local.ecr_registry}/${local.name}/realtime:latest
+        restart: unless-stopped
+        env_file: .env
+        environment:
+          PORT: 4104
+        ports:
+          - "4104:4104"
+        depends_on:
+          redis:
+            condition: service_healthy
+
+      dashboard:
+        image: ${local.ecr_registry}/${local.name}/dashboard:latest
+        restart: unless-stopped
+        ports:
+          - "4001:4001"
+        depends_on:
+          - api
 
     volumes:
       pgdata:
+      redisdata:
   EOT
 
   user_data = <<-EOT
@@ -125,7 +217,7 @@ locals {
       -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
 
-    mkdir -p /opt/mitto
+    mkdir -p /opt/mitto/secrets
     cat > /opt/mitto/.env <<'ENVEOF'
     ${local.env_file}
     ENVEOF
@@ -134,10 +226,15 @@ locals {
     ${local.docker_compose}
     COMPOSEEOF
 
-    aws ecr get-login-password --region ${var.aws_region} | \
-      docker login --username AWS --password-stdin ${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com || true
+    cat > /opt/mitto/secrets/github-app-private-key.pem <<'PEMEOF'
+    ${var.github_app_private_key}
+    PEMEOF
+    chmod 600 /opt/mitto/secrets/github-app-private-key.pem
 
-    cd /opt/mitto && /usr/local/bin/docker-compose up -d
+    aws ecr get-login-password --region ${var.aws_region} | \
+      docker login --username AWS --password-stdin ${local.ecr_registry} || true
+
+    cd /opt/mitto && /usr/local/bin/docker-compose up -d || true
   EOT
 }
 
