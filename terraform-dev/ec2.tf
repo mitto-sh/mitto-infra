@@ -128,6 +128,14 @@ locals {
           timeout: 5s
           retries: 5
 
+      migrate:
+        image: ${local.ecr_registry}/${local.name}/migrate:latest
+        restart: "no"
+        env_file: .env
+        depends_on:
+          postgres:
+            condition: service_healthy
+
       api:
         image: ${local.ecr_registry}/${local.name}/api:latest
         restart: unless-stopped
@@ -143,6 +151,8 @@ locals {
             condition: service_healthy
           redis:
             condition: service_healthy
+          migrate:
+            condition: service_completed_successfully
 
       worker:
         image: ${local.ecr_registry}/${local.name}/worker:latest
@@ -155,6 +165,8 @@ locals {
             condition: service_healthy
           redis:
             condition: service_healthy
+          migrate:
+            condition: service_completed_successfully
 
       build:
         image: ${local.ecr_registry}/${local.name}/build:latest

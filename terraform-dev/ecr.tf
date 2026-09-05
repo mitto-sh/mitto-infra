@@ -1,7 +1,9 @@
-# Same repos as prod — images pushed here get pulled by the dev EC2
-# instance today, and by ECS later with zero change to the repo names.
+# Same repos as prod, plus a dev-only "migrate" repo (one-shot DB migration
+# image — has no equivalent in prod, which uses a managed Aurora migration
+# path instead) — images pushed here get pulled by the dev EC2 instance
+# today, and the 6 prod-shared ones by ECS later with zero change to names.
 resource "aws_ecr_repository" "services" {
-  for_each             = toset(["api", "build", "orchestrator", "worker", "dashboard", "realtime"])
+  for_each             = toset(["api", "build", "orchestrator", "worker", "dashboard", "realtime", "migrate"])
   name                 = "${local.name}/${each.key}"
   image_tag_mutability = "MUTABLE"
   force_delete         = true
