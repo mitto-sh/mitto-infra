@@ -1,0 +1,71 @@
+name: deploy-service
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: docker-compose service name / ECR repo suffix
+        type: string
+        required: true
+      build-args:
+        description: newline-separated docker build --build-arg values
+        type: string
+        default: ""
+      needs-codeartifact:
+        description: mount an .npmrc secret so the build can pull @mitto-sh/* from CodeArtifact
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency: deploy-${{ inputs.service }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate npm against CodeArtifact
+        if: inputs.needs-codeartifact
+        run: |
+          aws codeartifact login --tool npm --region ${{ vars.AWS_REGION }} \
+            --domain mitto --domain-owner ${{ vars.AWS_ACCOUNT_ID }} --repository libs
+          cp "$HOME/.npmrc" ./.npmrc.ci
+
+      - name: Build and push
+        run: |
+          IMG="${{ steps.ecr.outputs.registry }}/mitto-dev/${{ inputs.service }}"
+          ARGS=()
+          while IFS= read -r a; do [ -n "$a" ] && ARGS+=(--build-arg "$a"); done <<< '${{ inputs.build-args }}'
+          if [ "${{ inputs.needs-codeartifact }}" = "true" ]; then ARGS+=(--secret id=npmrc,src=./.npmrc.ci); fi
+          docker buildx build --platform linux/amd64 --push "${ARGS[@]}" \
+            -t "$IMG:${{ github.sha }}" -t "$IMG:latest" .
+
+      - name: Redeploy on the dev instance
+        run: |
+          CID=$(aws ssm send-command \
+            --instance-ids ${{ vars.DEPLOY_INSTANCE_ID }} \
+            --document-name ${{ vars.DEPLOY_SSM_DOCUMENT }} \
+            --parameters service=${{ inputs.service }} \
+            --query Command.CommandId --output text)
+          echo "SSM command $CID"
+          aws ssm wait command-executed --command-id "$CID" --instance-id ${{ vars.DEPLOY_INSTANCE_ID }} || true
+          aws ssm get-command-invocation --command-id "$CID" --instance-id ${{ vars.DEPLOY_INSTANCE_ID }} \
+            --query StandardOutputContent --output text
+          STATUS=$(aws ssm get-command-invocation --command-id "$CID" --instance-id ${{ vars.DEPLOY_INSTANCE_ID }} \
+            --query Status --output text)
+          echo "status: $STATUS"
+          [ "$STATUS" = "Success" ]
