@@ -1,0 +1,51 @@
+name: mitto-agent
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - agent_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  build:
+    image: ${MITTO_BUILD_IMAGE:-ghcr.io/mitto-sh/mitto-build:latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  agent:
+    image: ${MITTO_ORCHESTRATOR_IMAGE:-ghcr.io/mitto-sh/mitto-orchestrator:latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      RUN_MODE: agent
+      DEPLOY_MODE: docker
+      DEPLOY_HOST: host.docker.internal
+      REDIS_URL: redis://redis:6379
+      MITTO_BUILD_URL: http://build:3001
+      MITTO_API_URL: ${MITTO_API_URL:-https://api.dhinrichs.dev}
+      MITTO_REALTIME_URL: ${MITTO_REALTIME_URL:-wss://realtime.dhinrichs.dev}
+      MITTO_AGENT_TOKEN: ${MITTO_AGENT_TOKEN:?set MITTO_AGENT_TOKEN in agent/.env}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+      build:
+        condition: service_started
+
+volumes:
+  agent_redis:
