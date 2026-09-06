@@ -25,8 +25,9 @@ services:
 
   api:
     build:
-      context: ..
-      dockerfile: mitto-api/Dockerfile
+      context: ../mitto-api
+      secrets:
+        - npmrc
     env_file: .env
     environment:
       DATABASE_URL: postgres://mitto:mitto@postgres:5432/mitto
@@ -45,8 +46,9 @@ services:
 
   worker:
     build:
-      context: ..
-      dockerfile: mitto-worker/Dockerfile
+      context: ../mitto-worker
+      secrets:
+        - npmrc
     env_file: .env
     environment:
       DATABASE_URL: postgres://mitto:mitto@postgres:5432/mitto
@@ -61,8 +63,9 @@ services:
 
   build:
     build:
-      context: ..
-      dockerfile: mitto-build/Dockerfile
+      context: ../mitto-build
+      secrets:
+        - npmrc
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379
@@ -77,8 +80,9 @@ services:
 
   orchestrator:
     build:
-      context: ..
-      dockerfile: mitto-orchestrator/Dockerfile
+      context: ../mitto-orchestrator
+      secrets:
+        - npmrc
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379
@@ -96,8 +100,9 @@ services:
 
   realtime:
     build:
-      context: ..
-      dockerfile: mitto-realtime/Dockerfile
+      context: ../mitto-realtime
+      secrets:
+        - npmrc
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379
@@ -109,8 +114,7 @@ services:
 
   dashboard:
     build:
-      context: ..
-      dockerfile: mitto-dashboard/Dockerfile
+      context: ../mitto-dashboard
       args:
         NEXT_PUBLIC_API_URL: http://localhost:4000
         NEXT_PUBLIC_REALTIME_URL: ws://localhost:4104
@@ -118,6 +122,10 @@ services:
       - "4001:4001"
     depends_on:
       - api
+
+secrets:
+  npmrc:
+    file: ${MITTO_NPMRC:-${HOME}/.npmrc}
 
 volumes:
   postgres_data:
