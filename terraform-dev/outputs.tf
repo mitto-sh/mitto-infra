@@ -33,6 +33,19 @@ output "ecr_repository_urls" {
   value = { for k, v in aws_ecr_repository.services : k => v.repository_url }
 }
 
+output "codeartifact_npm_registry" {
+  description = "npm registry endpoint for @mitto-sh/* — run: aws codeartifact login --tool npm --domain mitto --repository libs"
+  value       = "https://${aws_codeartifact_domain.mitto.domain}-${data.aws_caller_identity.current.account_id}.d.codeartifact.${var.aws_region}.amazonaws.com/npm/${aws_codeartifact_repository.libs.repository}/"
+}
+
+output "codeartifact_policy_arns" {
+  description = "Attach to CI roles: read for service builds, publish for the lib publish workflow"
+  value = {
+    read    = aws_iam_policy.codeartifact_read.arn
+    publish = aws_iam_policy.codeartifact_publish.arn
+  }
+}
+
 output "auto_shutdown_schedule" {
   description = "Apagado automático configurado"
   value       = "Stop diario a las ${var.shutdown_hour}:00, start Lun-Vie a las ${var.startup_hour}:00 (${var.schedule_timezone}) — apagado todo el fin de semana"
