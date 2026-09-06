@@ -46,6 +46,34 @@ output "codeartifact_policy_arns" {
   }
 }
 
+output "github_ci_role_arn" {
+  description = "Set as GitHub Actions org vars CODEARTIFACT_PUBLISH_ROLE_ARN and DEPLOY_ROLE_ARN"
+  value       = aws_iam_role.ci.arn
+}
+
+output "ssm_deploy_document" {
+  description = "SSM document name for deploy-service.yml"
+  value       = aws_ssm_document.deploy.name
+}
+
+output "instance_id" {
+  description = "EC2 instance id for aws ssm send-command --instance-ids"
+  value       = aws_instance.app.id
+}
+
+output "github_actions_org_vars" {
+  description = "Values to set as GitHub Actions org/repo variables"
+  value = {
+    AWS_ACCOUNT_ID                = data.aws_caller_identity.current.account_id
+    AWS_REGION                    = var.aws_region
+    CODEARTIFACT_PUBLISH_ROLE_ARN = aws_iam_role.ci.arn
+    DEPLOY_ROLE_ARN               = aws_iam_role.ci.arn
+    DEPLOY_INSTANCE_ID            = aws_instance.app.id
+    DEPLOY_SSM_DOCUMENT           = aws_ssm_document.deploy.name
+    ECR_REGISTRY                  = local.ecr_registry
+  }
+}
+
 output "auto_shutdown_schedule" {
   description = "Apagado automático configurado"
   value       = "Stop diario a las ${var.shutdown_hour}:00, start Lun-Vie a las ${var.startup_hour}:00 (${var.schedule_timezone}) — apagado todo el fin de semana"

@@ -246,6 +246,9 @@ locals {
     aws ecr get-login-password --region ${var.aws_region} | \
       docker login --username AWS --password-stdin ${local.ecr_registry} || true
 
+    # Pull first so a boot after the weekend shutdown converges to the latest
+    # images pushed to ECR while the instance was off.
+    cd /opt/mitto && /usr/local/bin/docker-compose pull || true
     cd /opt/mitto && /usr/local/bin/docker-compose up -d || true
   EOT
 }
