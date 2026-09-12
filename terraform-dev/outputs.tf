@@ -33,21 +33,8 @@ output "ecr_repository_urls" {
   value = { for k, v in aws_ecr_repository.services : k => v.repository_url }
 }
 
-output "codeartifact_npm_registry" {
-  description = "npm registry endpoint for @mitto-sh/* — run: aws codeartifact login --tool npm --domain mitto --repository libs"
-  value       = "https://${aws_codeartifact_domain.mitto.domain}-${data.aws_caller_identity.current.account_id}.d.codeartifact.${var.aws_region}.amazonaws.com/npm/${aws_codeartifact_repository.libs.repository}/"
-}
-
-output "codeartifact_policy_arns" {
-  description = "Attach to CI roles: read for service builds, publish for the lib publish workflow"
-  value = {
-    read    = aws_iam_policy.codeartifact_read.arn
-    publish = aws_iam_policy.codeartifact_publish.arn
-  }
-}
-
 output "github_ci_role_arn" {
-  description = "Set as GitHub Actions org vars CODEARTIFACT_PUBLISH_ROLE_ARN and DEPLOY_ROLE_ARN"
+  description = "Set as GitHub Actions org var DEPLOY_ROLE_ARN"
   value       = aws_iam_role.ci.arn
 }
 
@@ -64,13 +51,12 @@ output "instance_id" {
 output "github_actions_org_vars" {
   description = "Values to set as GitHub Actions org/repo variables"
   value = {
-    AWS_ACCOUNT_ID                = data.aws_caller_identity.current.account_id
-    AWS_REGION                    = var.aws_region
-    CODEARTIFACT_PUBLISH_ROLE_ARN = aws_iam_role.ci.arn
-    DEPLOY_ROLE_ARN               = aws_iam_role.ci.arn
-    DEPLOY_INSTANCE_ID            = aws_instance.app.id
-    DEPLOY_SSM_DOCUMENT           = aws_ssm_document.deploy.name
-    ECR_REGISTRY                  = local.ecr_registry
+    AWS_ACCOUNT_ID      = data.aws_caller_identity.current.account_id
+    AWS_REGION          = var.aws_region
+    DEPLOY_ROLE_ARN     = aws_iam_role.ci.arn
+    DEPLOY_INSTANCE_ID  = aws_instance.app.id
+    DEPLOY_SSM_DOCUMENT = aws_ssm_document.deploy.name
+    ECR_REGISTRY        = local.ecr_registry
   }
 }
 
